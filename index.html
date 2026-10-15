@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parlement van de Straat. Stemtool</title>
+<style>
+  :root{
+    --bg:#f4f2ec; --panel:#ffffff; --panel2:#ece9df; --line:#111111; --hair:#d8d4c6;
+    --text:#111111; --muted:#6b6b62; --ink:#111111;
+    --voor:#3c6b34; --tegen:#9c2f22; --onth:#6b6b62;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Helvetica Neue',-apple-system,BlinkMacSystemFont,Arial,sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:0 0 70px;}
+  .wrap.screen{max-width:1100px;}
+  .navbar{background:#111111;padding:22px 18px;}
+  .navbar-inner{max-width:1100px;margin:0 auto;}
+  .brand-label{font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:#fff;font-weight:800;}
+  .sub-label{margin-top:6px;font-size:16px;font-weight:700;text-transform:uppercase;color:#cfcac0;letter-spacing:0.04em;}
+  .content-pad{padding:22px 18px 0;}
+  .panel{background:var(--panel);border:1.5px solid var(--line);padding:22px;margin-bottom:18px;}
+  .section-label{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;font-weight:800;}
+  .body-text{font-size:13.5px;line-height:1.65;color:#2a2a26;margin:0 0 10px;}
+  .big-title{font-size:26px;font-weight:800;text-transform:uppercase;margin:0 0 6px;}
+  input[type=text],textarea,select{width:100%;background:var(--panel2);border:1.5px solid var(--line);color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;margin-bottom:8px;}
+  textarea{resize:vertical;}
+  .btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:#111;color:#fff;border:1.5px solid #111;padding:14px 18px;font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:0.1em;cursor:pointer;width:100%;}
+  .btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;color:var(--text);border:1.5px solid var(--line);padding:11px 16px;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;}
+  .vote-btn{font-size:17px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;padding:22px 10px;border:2px solid var(--line);background:#fff;color:var(--text);cursor:pointer;width:100%;}
+  .vote-btn.selected-voor{background:var(--voor);border-color:var(--voor);color:#fff;}
+  .vote-btn.selected-tegen{background:var(--tegen);border-color:var(--tegen);color:#fff;}
+  .vote-btn.selected-onthouding{background:var(--onth);border-color:var(--onth);color:#fff;}
+  .vote-grid{display:grid;grid-template-columns:1fr;gap:10px;}
+  .role-badge{display:inline-block;padding:4px 10px;border:1.5px solid var(--line);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
+  .qr-box{text-align:center;padding:10px 0;}
+  .qr-box img{border:1.5px solid var(--line);}
+  .url-text{font-family:'Courier New',monospace;font-size:12px;word-break:break-all;color:var(--muted);text-align:center;margin-top:8px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .legend-row{display:flex;justify-content:center;gap:24px;margin-top:4px;}
+  .legend-item{display:flex;align-items:center;gap:6px;}
+  .legend-dot{width:10px;height:10px;border:1px solid var(--line);}
+  .legend-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;}
+  .role-row{display:flex;align-items:center;gap:12px;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--hair);}
+  .role-row .pct{font-weight:800;font-family:'Courier New',monospace;}
+  .muted-small{font-size:12px;color:var(--muted);}
+  .center-text{text-align:center;}
+  .tabs{display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:18px;}
+  .tab{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:800;padding:0 14px 10px 0;margin-right:14px;border:none;background:transparent;color:var(--muted);cursor:pointer;}
+  .tab.active{color:var(--ink);text-decoration:underline;text-underline-offset:4px;}
+  .question-card{background:#fff;border:1.5px solid var(--line);border-left:4px solid var(--ink);padding:12px;font-size:13px;margin-bottom:8px;}
+  .wait-screen{text-align:center;padding:60px 20px;}
+  @media (max-width:520px){ .grid2{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ======== CONFIGURATIE ========
+   Vul hieronder de webapp URL in die je van Apps Script krijgt na "Implementeren > Nieuwe implementatie".
+   Zonder deze URL werkt de tool niet. */
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwe0BmrTR0KeKpqSXMb-MuQEBOWUKmEdI41dsva-VzZo1o2mDQbTU2N8hfGOes5QG30rw/exec";
+/* ================================ */
+
+const params = new URLSearchParams(location.search);
+const isScreen = params.has("regie");
+const presetRole = params.get("role");
+
+let participantId = localStorage.getItem("pvds_pid");
+if (!participantId) {
+  participantId = "p_" + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem("pvds_pid", participantId);
+}
+
+let state = null; // laatste snapshot van de backend
+let selectedRole = presetRole || localStorage.getItem("pvds_role") || null;
+
+async function apiGet(){
+  const res = await fetch(BACKEND_URL, { method: "GET" });
+  return res.json();
+}
+async function apiPost(body){
+  return fetch(BACKEND_URL, { method: "POST", body: JSON.stringify(body) });
+}
+
+async function refresh(){
+  if (!BACKEND_URL || BACKEND_URL.indexOf("PLAK_HIER") === 0){
+    document.getElementById("app").innerHTML = `<div class="wrap"><div class="content-pad"><div class="panel"><div class="section-label">Configuratie ontbreekt</div><p class="body-text">Vul in de HTML, bovenaan het script, de BACKEND_URL in met de webapp URL van je Apps Script implementatie.</p></div></div></div>`;
+    return;
+  }
+  try{
+    state = await apiGet();
+  }catch(e){
+    document.getElementById("app").innerHTML = `<div class="wrap"><div class="content-pad"><div class="panel"><div class="section-label">Geen verbinding</div><p class="body-text">Kan de backend niet bereiken. Controleer de BACKEND_URL en of de Apps Script webapp op "Iedereen" staat.</p></div></div></div>`;
+    return;
+  }
+  render();
+}
+
+function esc(s){ if(!s) return ""; return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+/* ---------- vote color helper ---------- */
+function voteHex(v){ return v==="voor" ? "#3c6b34" : v==="tegen" ? "#9c2f22" : "#6b6b62"; }
+
+/* ---------- hemicycle ---------- */
+function seatPositions(total){
+  const rows=5, radii=[55,81,107,133,159];
+  const sumR = radii.reduce((a,b)=>a+b,0);
+  const raw = radii.map(r => (r/sumR)*total);
+  const counts = raw.map(v => Math.floor(v));
+  let rem = total - counts.reduce((a,b)=>a+b,0);
+  const order = raw.map((v,i)=>({i,f:v-Math.floor(v)})).sort((a,b)=>b.f-a.f);
+  for(let k=0;k<rem;k++) counts[order[k%rows].i]++;
+  const cx=200, cy=195, pts=[];
+  for(let r=0;r<rows;r++){
+    const k = counts[r];
+    if(k<=0) continue;
+    for(let j=0;j<k;j++){
+      const deg = k===1 ? 90 : 165 - j*(150/(k-1));
+      const rad = deg*Math.PI/180;
+      pts.push({x: cx+radii[r]*Math.cos(rad), y: cy-radii[r]*Math.sin(rad)});
+    }
+  }
+  return pts;
+}
+function getSeats2(roles){
+  const total = roles.reduce((a,r)=>a+r.seats1,0);
+  const n = roles.length, base = Math.floor(total/n), rem = total%n;
+  const map = {};
+  roles.forEach((r,i)=>{ map[r.id] = base + (i<rem?1:0); });
+  return map;
+}
+function svgHemicycle(roles, seatsMap, roleResult, total){
+  const pts = seatPositions(total);
+  const colors = [];
+  roles.forEach(r=>{
+    const n = seatsMap[r.id]||0;
+    const col = voteHex(roleResult[r.id]);
+    for(let i=0;i<n;i++) colors.push(col);
+  });
+  let circles = "";
+  pts.forEach((p,i)=>{
+    circles += `<circle cx="${p.x}" cy="${p.y}" r="6.4" fill="${colors[i]||'#6b6b62'}" stroke="#f4f2ec" stroke-width="1"/>`;
+  });
+  return `<svg viewBox="0 0 400 210" style="width:100%;height:auto;">${circles}</svg>`;
+}
+
+/* ======================= SCREEN (regie) ======================= */
+function renderScreen(){
+  const a = state.admin;
+  const roles = a.roles;
+  const total = roles.reduce((s,r)=>s+r.seats1,0);
+  const seatsMap = a.round===1 ? Object.fromEntries(roles.map(r=>[r.id,r.seats1])) : getSeats2(roles);
+  const result = state.roleResult || {};
+  const counts = state.voteCounts || {};
+
+  const voteUrl = location.origin + location.pathname;
+
+  let w = { voor:0, tegen:0, onth:0 };
+  roles.forEach(r=>{
+    const v = result[r.id];
+    const s = seatsMap[r.id]||0;
+    if(v==="voor") w.voor+=s; else if(v==="tegen") w.tegen+=s; else w.onth+=s;
+  });
+
+  document.getElementById("app").innerHTML = `
+    <div class="wrap screen">
+      <div class="navbar"><div class="navbar-inner">
+        <div class="brand-label">Parlement van de Straat &middot; Regie</div>
+        <div class="sub-label">${esc(a.casussen[a.casusIndex].title)} &middot; Ronde ${a.round} &middot; ${a.phase==="open"?"Stemming open":a.phase==="closed"?"Gesloten":"Wachten"}</div>
+      </div></div>
+      <div class="content-pad">
+        <div class="grid2">
+          <div class="panel">
+            <div class="section-label">Casus</div>
+            <select id="sel-casus">
+              ${a.casussen.map((c,i)=>`<option value="${i}" ${i===a.casusIndex?'selected':''}>${esc(c.title)}</option>`).join("")}
+            </select>
+            <textarea id="txt-casus-title" placeholder="Titel casus">${esc(a.casussen[a.casusIndex].title)}</textarea>
+            <textarea id="txt-casus-desc" rows="3" placeholder="Omschrijving voorstel">${esc(a.casussen[a.casusIndex].desc)}</textarea>
+            <button class="btn-secondary" onclick="saveCasusText()">Casus opslaan</button>
+            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-secondary" onclick="setAdminField('round',1)">Ronde 1. Bestaande zetels</button>
+              <button class="btn-secondary" onclick="setAdminField('round',2)">Ronde 2. Gelijke zetels</button>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-secondary" onclick="setAdminField('phase','open')">Open stemming</button>
+              <button class="btn-secondary" onclick="setAdminField('phase','closed')">Sluit stemming</button>
+              <button class="btn-secondary" onclick="resetVotes()">Nieuwe stemming, wis stemmen</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="section-label">Scan om te stemmen</div>
+            <div class="qr-box">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(voteUrl)}" width="200" height="200" alt="QR code">
+              <div class="url-text">${esc(voteUrl)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-label">Live uitslag, gewogen naar zetels</div>
+          ${svgHemicycle(roles, seatsMap, result, total)}
+          <div class="legend-row">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--voor);"></div><span class="legend-label">Voor</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--tegen);"></div><span class="legend-label">Tegen</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--onth);"></div><span class="legend-label">Onthouding / nog niet gestemd</span></div>
+          </div>
+          <div class="center-text" style="margin-top:10px;font-size:30px;font-weight:800;font-family:monospace;">${total?Math.round(w.voor/total*100):0}% voor</div>
+        </div>
+
+        <div class="panel">
+          <div class="section-label">Per blok</div>
+          ${roles.map(r=>{
+            const c = counts[r.id] || {voor:0,tegen:0,onthouding:0};
+            return `<div class="role-row">
+              <div style="flex:1;font-weight:700;">${esc(r.name)}</div>
+              <div class="muted-small">${seatsMap[r.id]}z</div>
+              <div class="pct" style="color:var(--voor);">${c.voor}</div>
+              <div class="pct" style="color:var(--tegen);">${c.tegen}</div>
+              <div class="pct" style="color:var(--onth);">${c.onthouding}</div>
+              <div style="font-weight:800;text-transform:uppercase;font-size:10.5px;color:${voteHex(result[r.id])};min-width:90px;text-align:right;">${result[r.id]||'nog geen'}</div>
+            </div>`;
+          }).join("")}
+        </div>
+
+        ${state.questions && state.questions.length ? `
+        <div class="panel">
+          <div class="section-label">Oogst, vragen van de zaal</div>
+          <div class="grid2">
+            ${state.questions.slice(0,20).map(q=>`<div class="question-card">${esc(q.text)}</div>`).join("")}
+          </div>
+        </div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function saveCasusText(){
+  const a = state.admin;
+  a.casussen[a.casusIndex].title = document.getElementById("txt-casus-title").value;
+  a.casussen[a.casusIndex].desc = document.getElementById("txt-casus-desc").value;
+  pushAdmin(a);
+}
+document.addEventListener("change", (e)=>{
+  if(e.target && e.target.id === "sel-casus"){
+    const a = state.admin;
+    a.casusIndex = parseInt(e.target.value,10);
+    a.phase = "wait";
+    pushAdmin(a);
+  }
+});
+async function setAdminField(key, val){
+  const a = state.admin;
+  a[key] = val;
+  await pushAdmin(a);
+}
+async function pushAdmin(a){
+  await apiPost({ action: "admin_update", payload: a });
+  refresh();
+}
+async function resetVotes(){
+  await apiPost({ action: "reset_votes" });
+  refresh();
+}
+
+/* ======================= PHONE (stem) ======================= */
+function renderPhone(){
+  const a = state.admin;
+  const roles = a.roles;
+
+  if(!selectedRole){
+    document.getElementById("app").innerHTML = `
+      <div class="wrap">
+        <div class="navbar"><div class="navbar-inner"><div class="brand-label">Parlement van de Straat</div></div></div>
+        <div class="content-pad">
+          <div class="panel">
+            <div class="section-label">Kies je blok</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              ${roles.map(r=>`<button class="btn-secondary" style="justify-content:flex-start;" onclick="pickRole('${r.id}')">${esc(r.name)}</button>`).join("")}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const role = roles.find(r=>r.id===selectedRole);
+  const casus = a.casussen[a.casusIndex];
+  const myVoteKey = "pvds_vote_" + a.casusIndex + "_" + a.round + "_" + selectedRole;
+  const myVote = localStorage.getItem(myVoteKey);
+
+  let body;
+  if(a.phase !== "open"){
+    body = `<div class="wait-screen">
+      <div class="section-label">${a.phase === "closed" ? "Stemming gesloten" : "Wacht op de voorzitter"}</div>
+      <p class="body-text">De uitslag verschijnt op het scherm vooraan.</p>
+    </div>`;
+  } else {
+    body = `
+      <div class="panel">
+        <div class="section-label">${esc(casus.title)}</div>
+        <p class="body-text">${esc(casus.desc)}</p>
+      </div>
+      <div class="panel">
+        <div class="section-label">Ronde ${a.round}. Stem namens dit blok</div>
+        <div class="vote-grid">
+          <button class="vote-btn ${myVote==='voor'?'selected-voor':''}" onclick="castVote('voor')">Voor</button>
+          <button class="vote-btn ${myVote==='tegen'?'selected-tegen':''}" onclick="castVote('tegen')">Tegen</button>
+          <button class="vote-btn ${myVote==='onthouding'?'selected-onthouding':''}" onclick="castVote('onthouding')">Onthouding</button>
+        </div>
+        ${myVote ? `<p class="muted-small center-text" style="margin-top:12px;">Jullie stem staat op ${myVote}. Overleg aan tafel, pas aan als jullie van gedachten veranderen.</p>` : ""}
+      </div>
+    `;
+  }
+
+  document.getElementById("app").innerHTML = `
+    <div class="wrap">
+      <div class="navbar"><div class="navbar-inner">
+        <div class="brand-label">Parlement van de Straat</div>
+        <div class="role-badge" style="margin-top:10px;background:#fff;color:#111;">${esc(role ? role.name : selectedRole)}</div>
+      </div></div>
+      <div class="content-pad">${body}</div>
+    </div>
+  `;
+}
+
+function pickRole(id){
+  selectedRole = id;
+  localStorage.setItem("pvds_role", id);
+  render();
+}
+async function castVote(value){
+  const a = state.admin;
+  const myVoteKey = "pvds_vote_" + a.casusIndex + "_" + a.round + "_" + selectedRole;
+  localStorage.setItem(myVoteKey, value);
+  await apiPost({ action: "vote", casusIndex: a.casusIndex, round: a.round, roleId: selectedRole, participantId: participantId, value: value });
+  refresh();
+}
+
+/* ======================= router ======================= */
+function render(){
+  if(!state) return;
+  if(isScreen) renderScreen(); else renderPhone();
+}
+
+refresh();
+setInterval(refresh, 2500);
+</script>
+</body>
+</html>
