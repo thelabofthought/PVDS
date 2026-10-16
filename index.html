@@ -27,6 +27,7 @@
   textarea{resize:vertical;}
   .btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:#111;color:#fff;border:1.5px solid #111;padding:14px 18px;font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:0.1em;cursor:pointer;width:100%;}
   .btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;color:var(--text);border:1.5px solid var(--line);padding:11px 16px;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;}
+  .btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;color:var(--tegen);border:1.5px solid var(--tegen);padding:11px 16px;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;}
   .vote-btn{font-size:17px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;padding:22px 10px;border:2px solid var(--line);background:#fff;color:var(--text);cursor:pointer;width:100%;}
   .vote-btn.selected-voor{background:var(--voor);border-color:var(--voor);color:#fff;}
   .vote-btn.selected-tegen{background:var(--tegen);border-color:var(--tegen);color:#fff;}
@@ -94,6 +95,15 @@ async function refresh(){
   }catch(e){
     document.getElementById("app").innerHTML = `<div class="wrap"><div class="content-pad"><div class="panel"><div class="section-label">Geen verbinding</div><p class="body-text">Kan de backend niet bereiken. Controleer de BACKEND_URL en of de Apps Script webapp op "Iedereen" staat.</p></div></div></div>`;
     return;
+  }
+  // Na "Opnieuw beginnen" krijgt de backend een nieuwe epoch. Telefoons wissen dan hun onthouden blok en stemmen.
+  const ep = String((state.admin && state.admin.epoch) || 0);
+  if(localStorage.getItem("pvds_epoch") !== ep){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("pvds_vote_") === 0 || k === "pvds_role") localStorage.removeItem(k);
+    });
+    localStorage.setItem("pvds_epoch", ep);
+    if(!presetRole) selectedRole = null;
   }
   render();
 }
@@ -188,6 +198,7 @@ function renderScreen(){
               <button class="btn-secondary" onclick="setAdminField('phase','open')">Open stemming</button>
               <button class="btn-secondary" onclick="setAdminField('phase','closed')">Sluit stemming</button>
               <button class="btn-secondary" onclick="resetVotes()">Nieuwe stemming, wis stemmen</button>
+              <button class="btn-danger" onclick="resetAll()">Opnieuw beginnen</button>
             </div>
           </div>
           <div class="panel">
@@ -262,6 +273,11 @@ async function pushAdmin(a){
 }
 async function resetVotes(){
   await apiPost({ action: "reset_votes" });
+  refresh();
+}
+async function resetAll(){
+  if(!confirm("Alles wissen en opnieuw beginnen? Stemmen, verslag, vragen en casusteksten verdwijnen, en alle telefoons kiezen opnieuw een blok.")) return;
+  await apiPost({ action: "reset_all" });
   refresh();
 }
 
