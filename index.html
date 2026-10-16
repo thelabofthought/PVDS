@@ -61,7 +61,7 @@
 /* ======== CONFIGURATIE ========
    Vul hieronder de webapp URL in die je van Apps Script krijgt na "Implementeren > Nieuwe implementatie".
    Zonder deze URL werkt de tool niet. */
-const BACKEND_URL = https://script.google.com/macros/s/AKfycbwe0BmrTR0KeKpqSXMb-MuQEBOWUKmEdI41dsva-VzZo1o2mDQbTU2N8hfGOes5QG30rw/exec";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwe0BmrTR0KeKpqSXMb-MuQEBOWUKmEdI41dsva-VzZo1o2mDQbTU2N8hfGOes5QG30rw/exec";
 /* ================================ */
 
 const params = new URLSearchParams(location.search);
@@ -75,6 +75,15 @@ if (!participantId) {
 }
 
 let state = null; // laatste snapshot van de backend
+const VERSION = "v3";
+let savedAt = 0;
+// Concepttekst per casus, zodat wat je typt nooit verloren gaat bij een verversing van het scherm.
+const drafts = {};
+function setDraft(field, v){ drafts[state.admin.casusIndex + ":" + field] = v; }
+function draftVal(field, saved){
+  const k = state.admin.casusIndex + ":" + field;
+  return (k in drafts) ? drafts[k] : saved;
+}
 let selectedRole = presetRole || localStorage.getItem("pvds_role") || null;
 
 async function apiGet(){
@@ -181,7 +190,7 @@ function renderScreen(){
     <div class="wrap screen">
       <div class="navbar"><div class="navbar-inner">
         <div class="brand-label">Parlement van de Straat &middot; Regie</div>
-        <div class="sub-label">${esc(a.casussen[a.casusIndex].title)} &middot; Ronde ${a.round} &middot; ${a.phase==="open"?"Stemming open":a.phase==="closed"?"Gesloten":"Wachten"}</div>
+        <div class="sub-label">${esc(a.casussen[a.casusIndex].title)} &middot; Ronde ${a.round} &middot; ${a.phase==="open"?"Stemming open":a.phase==="closed"?"Gesloten":"Wachten"} &middot; ${VERSION}</div>
       </div></div>
       <div class="content-pad">
         <div class="grid2">
@@ -190,9 +199,9 @@ function renderScreen(){
             <select id="sel-casus">
               ${a.casussen.map((c,i)=>`<option value="${i}" ${i===a.casusIndex?'selected':''}>${esc(c.title)}</option>`).join("")}
             </select>
-            <textarea id="txt-casus-title" placeholder="Titel casus">${esc(a.casussen[a.casusIndex].title)}</textarea>
-            <textarea id="txt-casus-desc" rows="3" placeholder="Omschrijving voorstel">${esc(a.casussen[a.casusIndex].desc)}</textarea>
-            <button class="btn-secondary" onclick="saveCasusText()">Casus opslaan</button>
+            <textarea id="txt-casus-title" placeholder="Titel casus" oninput="setDraft('title', this.value)">${esc(draftVal('title', a.casussen[a.casusIndex].title))}</textarea>
+            <textarea id="txt-casus-desc" rows="3" placeholder="Omschrijving voorstel" oninput="setDraft('desc', this.value)">${esc(draftVal('desc', a.casussen[a.casusIndex].desc))}</textarea>
+            <button class="btn-secondary" onclick="saveCasusText()">Casus opslaan</button> <span class="muted-small">${(Date.now() - savedAt) < 6000 ? "Opgeslagen" : ""}</span>
             <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn-secondary" onclick="setAdminField('round',1)">Ronde 1. Bestaande zetels</button>
               <button class="btn-secondary" onclick="setAdminField('round',2)">Ronde 2. Gelijke zetels</button>
@@ -256,6 +265,9 @@ function saveCasusText(){
   const a = state.admin;
   a.casussen[a.casusIndex].title = document.getElementById("txt-casus-title").value;
   a.casussen[a.casusIndex].desc = document.getElementById("txt-casus-desc").value;
+  delete drafts[a.casusIndex + ":title"];
+  delete drafts[a.casusIndex + ":desc"];
+  savedAt = Date.now();
   pushAdmin(a);
 }
 document.addEventListener("change", (e)=>{
